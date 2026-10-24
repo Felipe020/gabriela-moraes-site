@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+out/
+dist/
+build/
+.turbo/
+coverage/
+
+# Vercel
+.vercel/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# TypeScript cache
+*.tsbuildinfo
