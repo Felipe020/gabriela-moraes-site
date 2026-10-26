@@ -192,6 +192,7 @@ function otherProjectPage(item) {
 function setupLightbox() {
   const links = [...root.querySelectorAll("a[data-lightbox]")];
   if (!links.length) return;
+  const gallery = [...new Map(links.map((link) => [link.href, link])).values()];
   const modal = document.createElement("div");
   modal.className = "lightbox";
   modal.hidden = true;
@@ -202,17 +203,24 @@ function setupLightbox() {
       <button type="button" data-zoom-in aria-label="Aumentar zoom">+</button>
       <button type="button" data-close aria-label="Fechar imagem">×</button>
     </div></div>
-    <div class="lightbox__stage"><img alt="" draggable="false" /></div>
-    <p class="lightbox__hint">Use os botões, a roda do mouse ou pinça para ampliar. Arraste para mover a imagem.</p>
+    <div class="lightbox__stage"><img alt="" draggable="false" />
+      <button type="button" class="lightbox__arrow lightbox__arrow--prev" data-prev aria-label="Imagem anterior deste projeto">‹</button>
+      <button type="button" class="lightbox__arrow lightbox__arrow--next" data-next aria-label="Próxima imagem deste projeto">›</button>
+    </div>
+    <p class="lightbox__hint"><span class="lightbox__count" aria-live="polite"></span> Use as setas para navegar pelas imagens do projeto. Use os botões, a roda do mouse ou pinça para ampliar; arraste para mover.</p>
   </div>`;
   document.body.append(modal);
   const stage = modal.querySelector(".lightbox__stage");
   const image = stage.querySelector("img");
   const caption = modal.querySelector(".lightbox__caption");
+  const count = modal.querySelector(".lightbox__count");
   const resetButton = modal.querySelector("[data-zoom-reset]");
   const closeButton = modal.querySelector("[data-close]");
+  const prevButton = modal.querySelector("[data-prev]");
+  const nextButton = modal.querySelector("[data-next]");
   const pointers = new Map();
   let trigger = null;
+  let currentIndex = 0;
   let scale = 1;
   let panX = 0;
   let panY = 0;
@@ -253,20 +261,33 @@ function setupLightbox() {
     trigger?.focus();
   }
 
+  function showImage(index) {
+    currentIndex = (index + gallery.length) % gallery.length;
+    const link = gallery[currentIndex];
+    caption.textContent = link.querySelector("img")?.alt || "Imagem do projeto";
+    count.textContent = `${String(currentIndex + 1).padStart(2, "0")} / ${String(gallery.length).padStart(2, "0")}`;
+    image.alt = caption.textContent;
+    image.src = link.href;
+    pointers.clear();
+    pinchStart = null;
+    scale = 1; panX = panY = 0;
+    updateTransform();
+  }
+
+  prevButton.hidden = nextButton.hidden = gallery.length < 2;
+
   links.forEach((link) => link.addEventListener("click", (event) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     trigger = link;
-    caption.textContent = link.querySelector("img")?.alt || "Imagem do projeto";
-    image.alt = caption.textContent;
-    image.src = link.href;
-    scale = 1; panX = panY = 0;
     modal.hidden = false;
     document.body.classList.add("lightbox-open");
-    updateTransform();
+    showImage(gallery.findIndex((item) => item.href === link.href));
     closeButton.focus();
   }));
   image.addEventListener("load", updateTransform);
+  prevButton.addEventListener("click", () => showImage(currentIndex - 1));
+  nextButton.addEventListener("click", () => showImage(currentIndex + 1));
   modal.querySelector("[data-zoom-out]").addEventListener("click", () => setZoom(scale / 1.4));
   modal.querySelector("[data-zoom-in]").addEventListener("click", () => setZoom(scale * 1.4));
   resetButton.addEventListener("click", () => setZoom(1));
@@ -278,6 +299,7 @@ function setupLightbox() {
     setZoom(scale * (event.deltaY < 0 ? 1.15 : 1 / 1.15), event.clientX, event.clientY);
   }, { passive: false });
   stage.addEventListener("pointerdown", (event) => {
+    if (event.target.closest("button")) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
     event.preventDefault();
     stage.setPointerCapture(event.pointerId);
@@ -311,19 +333,19 @@ function setupLightbox() {
   document.addEventListener("keydown", (event) => {
     if (modal.hidden) return;
     if (event.key === "Escape") { close(); return; }
+    if (gallery.length > 1 && event.key === "ArrowLeft") { event.preventDefault(); showImage(currentIndex - 1); return; }
+    if (gallery.length > 1 && event.key === "ArrowRight") { event.preventDefault(); showImage(currentIndex + 1); return; }
     if (event.key === "+" || event.key === "=") { event.preventDefault(); setZoom(scale * 1.4); }
     if (event.key === "-") { event.preventDefault(); setZoom(scale / 1.4); }
     if (event.key === "0") { event.preventDefault(); setZoom(1); }
-    if (scale > 1 && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+    if (scale > 1 && ["ArrowUp", "ArrowDown"].includes(event.key)) {
       event.preventDefault();
-      if (event.key === "ArrowLeft") panX += 60;
-      if (event.key === "ArrowRight") panX -= 60;
       if (event.key === "ArrowUp") panY += 60;
       if (event.key === "ArrowDown") panY -= 60;
       updateTransform();
     }
     if (event.key === "Tab") {
-      const buttons = [...modal.querySelectorAll("button")];
+      const buttons = [...modal.querySelectorAll("button:not([hidden])")];
       if (event.shiftKey && document.activeElement === buttons[0]) { event.preventDefault(); buttons.at(-1).focus(); }
       else if (!event.shiftKey && document.activeElement === buttons.at(-1)) { event.preventDefault(); buttons[0].focus(); }
     }
