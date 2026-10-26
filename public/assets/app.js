@@ -31,8 +31,8 @@ function imageFrame({ src, label, number = "", alt = "", fit = "cover", shape = 
 
 function nav(isProject = false) {
   const p = isProject ? "/" : "";
-  return `<a class="skip-link" href="#main">Ir para o conteúdo</a>
-  <header class="site-header" id="topo">
+  return `<div id="topo" aria-hidden="true"></div><a class="skip-link" href="#main">Ir para o conteúdo</a>
+  <header class="site-header">
     <div class="site-header__inner container">
       <a class="brand" href="${p}#topo" aria-label="Gabriela Moraes, voltar ao início">GABRIELA <strong>MORAES</strong></a>
       <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">MENU <span class="menu-toggle__icon" aria-hidden="true"><i></i><i></i></span></button>
