@@ -117,7 +117,7 @@ function contact() {
 
 function footer() {
   const aboutHref = document.body.dataset.page === "home" ? "#sobre" : "/#sobre";
-  return `<footer class="footer"><div class="container footer__grid"><div><strong>GABRIELA MORAES</strong><span>ARQUITETURA + URBANISMO</span></div><span>JUIZ DE FORA — MG</span><span>© 2026 GABRIELA MORAES</span><span class="footer__actions"><a href="/gerenciar/">GERENCIAR</a><a href="${aboutHref}">↑ &nbsp; VOLTAR AO SOBRE</a></span></div></footer>`;
+  return `<footer class="footer"><div class="container footer__grid"><div><strong>GABRIELA MORAES</strong><span>ARQUITETURA + URBANISMO</span></div><span>JUIZ DE FORA — MG</span><span>© 2026 GABRIELA MORAES</span><span class="footer__actions"><a href="${aboutHref}">↑ &nbsp; VOLTAR AO SOBRE</a></span></div></footer>`;
 }
 
 function homePage() {
