@@ -8,7 +8,7 @@ export default async function ManagePage() {
   const user = await getChatGPTUser();
   if (!user || user.email.toLowerCase() !== ownerEmail) {
     return <>
-      <link rel="stylesheet" href="/assets/admin.css" />
+      <link rel="stylesheet" href="/assets/admin.css?v=29" />
       <main className="manager manager--login">
         <header className="manager__header"><a href="/">← PORTFÓLIO</a><span>GABRIELA MORAES / GERENCIAR</span></header>
         <section className="manager__login" aria-labelledby="login-title">
@@ -22,5 +22,5 @@ export default async function ManagePage() {
       </main>
     </>;
   }
-  return <><link rel="stylesheet" href="/assets/admin.css" /><div id="admin-app" /><script type="module" src="/assets/admin.js?v=26" /></>;
+  return <><link rel="stylesheet" href="/assets/admin.css?v=29" /><div id="admin-app" /><script type="module" src="/assets/admin.js?v=29" /></>;
 }

@@ -1,9 +1,9 @@
 import { profile, experiences, software, projects as initialProjects } from "./data.js";
 import { otherProjects as initialOtherProjects } from "./other-projects.js";
-import { normalizeProject } from "./project-normalize.js";
+import { normalizeProject, normalizeOtherProject } from "./project-normalize.js";
 
 let projects = initialProjects.map(normalizeProject);
-let otherProjects = [...initialOtherProjects];
+let otherProjects = initialOtherProjects.map(normalizeOtherProject);
 try {
   const response = await fetch("/api/items", { cache: "no-store" });
   if (response.ok) {
@@ -12,8 +12,8 @@ try {
       const collection = kind === "project" ? projects : otherProjects;
       const index = collection.findIndex((entry) => entry.slug === slug);
       if (deleted && index >= 0) collection.splice(index, 1);
-      else if (!deleted && index >= 0) collection[index] = kind === "project" ? normalizeProject(item) : item;
-      else if (!deleted) collection.push(kind === "project" ? normalizeProject(item) : item);
+      else if (!deleted && index >= 0) collection[index] = kind === "project" ? normalizeProject(item) : normalizeOtherProject(item);
+      else if (!deleted) collection.push(kind === "project" ? normalizeProject(item) : normalizeOtherProject(item));
     }
   }
 } catch (error) { console.error("Não foi possível carregar os projetos.", error); }
@@ -101,9 +101,9 @@ function projectsSection() {
 
 function rendersSection() {
   return `<section class="renders section-pad" id="renders" aria-labelledby="renders-title" data-carousel><div class="container">
-    <div class="renders__heading"><div><p class="eyebrow">SELEÇÃO COMPLEMENTAR</p><h2 id="renders-title">OUTROS<br /><span>PROJETOS.</span></h2></div><p>Ambientes e estudos de visualização organizados por projeto e ferramenta.</p></div>
+    <div class="renders__heading"><div><p class="eyebrow">SELEÇÃO COMPLEMENTAR</p><h2 id="renders-title">OUTROS<br /><span>PROJETOS.</span></h2></div><p>Projetos desenvolvidos durante meus estágios em arquitetura e urbanismo.</p></div>
     <div class="projects__carousel-head renders__carousel-head"><p>DESLIZE PARA EXPLORAR <span aria-hidden="true">→</span></p><div class="projects__controls"><span class="projects__counter" data-carousel-counter aria-live="polite">01 / ${String(otherProjects.length).padStart(2, "0")}</span><button type="button" class="carousel-button" data-carousel-prev aria-label="Projeto anterior">←</button><button type="button" class="carousel-button" data-carousel-next aria-label="Próximo projeto">→</button></div></div>
-    <div class="projects__track renders__track" data-carousel-track tabindex="0" aria-label="Carrossel de outros projetos">${otherProjects.map((item) => `<a class="render-item other-project-card" href="/outros-projetos/${item.slug}/"${item.images[0].width && item.images[0].height ? ` style="--preview-aspect:${item.images[0].width / item.images[0].height}"` : ""} aria-label="Ver ${item.title}, ${item.images.length} imagens feitas com ${item.tool}">${imageFrame({ src: item.images[0].src, label: item.title.toUpperCase(), number: item.id, alt: `${item.title}, visualização com ${item.tool}`, fit: "contain", shape: "landscape", width: item.images[0].width, height: item.images[0].height })}<span class="other-project-card__meta"><strong>${item.title}</strong><small>${item.tool.toUpperCase()} · ${String(item.images.length).padStart(2, "0")} IMAGENS <span aria-hidden="true">↗</span></small></span></a>`).join("")}</div>
+    <div class="projects__track renders__track" data-carousel-track tabindex="0" aria-label="Carrossel de outros projetos">${otherProjects.map((item, index) => { const coverImage = item.images.find(image => image.src === item.cover) || { src: item.cover }; return `<a class="render-item other-project-card project-card visual-link" href="/outros-projetos/${item.slug}/"${coverImage.width && coverImage.height ? ` style="--preview-aspect:${coverImage.width / coverImage.height}"` : ""} aria-label="Ver ${item.title}, ${item.images.length} imagens feitas com ${item.tool}">${imageFrame({ src: coverImage.src, label: item.title.toUpperCase(), number: item.id, alt: `${item.title}, visualização com ${item.tool}`, fit: "contain", shape: "landscape", width: coverImage.width, height: coverImage.height })}<div class="other-project-card__meta"><div class="project-card__info"><span class="project-card__number">${String(index + 1).padStart(2, "0")} / ${String(otherProjects.length).padStart(2, "0")}</span><div><h3>${escapeText(item.title)}</h3>${item.category ? `<p>${escapeText(item.category)}</p>` : ""}</div><span class="project-card__arrow" aria-hidden="true">↗</span></div></div></a>`; }).join("")}</div>
   </div></section>`;
 }
 
@@ -117,7 +117,7 @@ function contact() {
 
 function footer() {
   const aboutHref = document.body.dataset.page === "home" ? "#sobre" : "/#sobre";
-  return `<footer class="footer"><div class="container footer__grid"><div><strong>GABRIELA MORAES</strong><span>ARQUITETURA + URBANISMO</span></div><span>JUIZ DE FORA — MG</span><span>© 2026 GABRIELA MORAES</span><span class="footer__actions"><a href="${aboutHref}">↑ &nbsp; VOLTAR AO SOBRE</a></span></div></footer>`;
+  return `<footer class="footer"><div class="container footer__grid"><div><strong>GABRIELA MORAES</strong><span>ARQUITETURA + URBANISMO</span></div><span>JUIZ DE FORA — MG</span><span>© 2026 GABRIELA MORAES</span><span class="footer__actions"><a href="/gerenciar">GERENCIAR ↗</a><a href="${aboutHref}">↑ &nbsp; VOLTAR AO SOBRE</a></span></div></footer>`;
 }
 
 function homePage() {
@@ -152,41 +152,32 @@ function drawingsSection(project, type) {
   </section>`;
 }
 
-function detailPage(project) {
+function detailPage(project, kind = "project") {
+  const other = kind === "other";
+  const collection = other ? otherProjects : projects;
+  const projectHref = (item) => other ? `/outros-projetos/${item.slug}/` : href(item);
+  const galleryImages = other && project.images[0]?.src === project.cover ? project.images.slice(1) : project.images;
   document.title = `${project.title} — Gabriela Moraes`;
-  const paragraphs = Array.isArray(project.description) ? project.description : [project.description || "Texto e informações adicionais sobre o projeto serão incluídos nesta etapa de apresentação."];
+  const paragraphs = (Array.isArray(project.description) ? project.description : String(project.description || "").split("\n")).filter(paragraph => paragraph.trim());
   root.innerHTML = `${nav(true)}<main id="main" class="detail-page"><div class="container">
-    <a class="back-link" href="/#projetos"><span aria-hidden="true">←</span> VOLTAR AOS PROJETOS</a>
+    <a class="back-link" href="${other ? "/#renders" : "/#projetos"}"><span aria-hidden="true">←</span> ${other ? "VOLTAR A OUTROS PROJETOS" : "VOLTAR AOS PROJETOS"}</a>
     <div class="detail-heading detail-heading--project">
       <a class="detail-heading__cover" href="${project.cover}" data-lightbox aria-label="Ampliar capa de ${escapeText(project.title)} no visualizador"><img src="${project.cover}" alt="Capa do projeto ${escapeText(project.title)}" loading="eager" decoding="async" /></a>
-      <div class="detail-heading__content"><p>${project.id} / ${project.category.toUpperCase()}</p><h1>${project.title}</h1><div class="detail-heading__meta">${project.location ? `<span>${project.location}</span>` : ""}${project.year ? `<span>${project.year}</span>` : ""}</div></div>
+      <div class="detail-heading__content"><p>${escapeText(project.id)} / ${escapeText(project.category ? project.category.toUpperCase() : other ? "OUTROS PROJETOS" : "PROJETO ACADÊMICO")}</p><h1>${project.title}</h1><div class="detail-heading__meta">${project.location ? `<span>${project.location}</span>` : ""}${project.year ? `<span>${project.year}</span>` : ""}</div></div>
     </div>
-    <div class="detail-intro"><div><span class="eyebrow">SOBRE O PROJETO</span><h2>Uma leitura<br />do projeto<span class="heading-period">.</span></h2></div><div class="detail-intro__body">${paragraphs.map((paragraph) => `<p>${paragraph}</p>`).join("")}</div></div>
-    <div class="detail-facts"><span>FICHA TÉCNICA</span><dl><div><dt>PROJETO</dt><dd>${project.title}</dd></div><div><dt>CATEGORIA</dt><dd>${project.category}</dd></div>${project.location ? `<div><dt>LOCAL</dt><dd>${project.location}</dd></div>` : ""}${project.year ? `<div><dt>ANO</dt><dd>${project.year}</dd></div>` : ""}${project.discipline ? `<div><dt>DISCIPLINA</dt><dd>${project.discipline}</dd></div>` : ""}</dl></div>
+    ${paragraphs.length ? `<div class="detail-intro"><div><span class="eyebrow">SOBRE O PROJETO</span><h2>Uma leitura<br />do projeto<span class="heading-period">.</span></h2></div><div class="detail-intro__body">${paragraphs.map((paragraph) => `<p>${escapeText(paragraph)}</p>`).join("")}</div></div>` : ""}
+    <div class="detail-facts"><span>FICHA TÉCNICA</span><dl><div><dt>PROJETO</dt><dd>${project.title}</dd></div>${project.category ? `<div><dt>CATEGORIA</dt><dd>${escapeText(project.category)}</dd></div>` : ""}${project.location ? `<div><dt>LOCAL</dt><dd>${project.location}</dd></div>` : ""}${project.year ? `<div><dt>ANO</dt><dd>${project.year}</dd></div>` : ""}${project.discipline ? `<div><dt>${other ? "PARTICIPAÇÃO / ETAPA" : "DISCIPLINA"}</dt><dd>${escapeText(project.discipline)}</dd></div>` : ""}</dl></div>
     ${drawingsSection(project, "diagrams")}
     ${drawingsSection(project, "plans")}
-    ${project.photoSoftware ? `<div class="detail-photos__credit"><span>RENDERIZADO POR</span><strong>${escapeText(project.photoSoftware)}</strong></div>` : ""}
+    <div class="detail-plans__heading detail-renders__heading"><div><h2 id="renders-heading">Renders<span class="heading-period">.</span></h2></div>${project.photoSoftware ? `<div class="detail-plans__credit"><span>RENDERIZADO POR</span><strong>${escapeText(project.photoSoftware)}</strong></div>` : ""}</div>
     <a class="detail-hero-link" href="${project.cover}" data-lightbox aria-label="Ampliar capa de ${escapeText(project.title)} no visualizador">${imageFrame({ src: project.cover, label: "CAPA DO PROJETO", number: project.id, alt: `Render principal do projeto ${project.title}`, shape: "detail-hero", eager: true })}</a>
-    <div class="detail-gallery">${project.images.map((im, i) => `<div class="detail-gallery__item detail-gallery__item--${i + 1}"><a class="detail-gallery__link" href="${im.src}" data-lightbox aria-label="Ampliar ${escapeText(im.label)} de ${escapeText(project.title)} no visualizador">${imageFrame({ src: im.src, label: im.label.toUpperCase(), number: String(i + 1).padStart(2, "0"), alt: `${im.label} de ${project.title}`, fit: im.fit, shape: im.shape })}</a><span>${String(i + 1).padStart(2, "0")} / ${String(project.images.length).padStart(2, "0")}</span></div>`).join("")}</div>
-    <div class="detail-next">${(() => { const next = projects[(projects.indexOf(project) + 1) % projects.length]; return `<span>PRÓXIMO PROJETO</span><a href="${href(next)}">${next.title}<span aria-hidden="true">↗</span></a>`; })()}</div>
+    <div class="detail-gallery">${galleryImages.map((im, i) => `<div class="detail-gallery__item detail-gallery__item--${i + 1}"><a class="detail-gallery__link" href="${im.src}" data-lightbox aria-label="Ampliar ${escapeText(im.label)} de ${escapeText(project.title)} no visualizador">${imageFrame({ src: im.src, label: im.label.toUpperCase(), number: String(i + 1).padStart(2, "0"), alt: `${im.label} de ${project.title}`, fit: im.fit, shape: im.shape })}</a><span>${String(i + 1).padStart(2, "0")} / ${String(galleryImages.length).padStart(2, "0")}</span></div>`).join("")}</div>
+    <div class="detail-next">${(() => { const next = collection[(collection.indexOf(project) + 1) % collection.length]; return `<span>PRÓXIMO PROJETO</span><a href="${projectHref(next)}">${next.title}<span aria-hidden="true">↗</span></a>`; })()}</div>
   </div></main>${footer()}`;
 }
 
 function otherProjectPage(item) {
-  document.title = `${item.title} — Gabriela Moraes`;
-  const next = otherProjects[(otherProjects.indexOf(item) + 1) % otherProjects.length];
-  const imageLabel = (index) => `Imagem ${String(index + 1).padStart(2, "0")} de ${item.title}`;
-  root.innerHTML = `${nav(true)}<main id="main" class="detail-page other-detail"><div class="container">
-    <a class="back-link" href="/#renders"><span aria-hidden="true">←</span> VOLTAR A OUTROS PROJETOS</a>
-    <div class="detail-heading"><p>${item.id} / ${String(otherProjects.length).padStart(2, "0")} · VISUALIZAÇÃO COM ${item.tool.toUpperCase()}</p><h1>${item.title}</h1><div><span>${String(item.images.length).padStart(2, "0")} IMAGENS</span></div></div>
-    ${item.description?.trim() ? `<section class="other-detail__description" aria-label="Sobre o projeto"><span class="eyebrow">SOBRE O PROJETO</span><p>${escapeText(item.description.trim())}</p></section>` : ""}
-    ${item.executiveImages?.length ? `<section class="other-detail__executive" aria-labelledby="executive-title"><div class="other-detail__executive-head"><div><span class="eyebrow">DESENHOS TÉCNICOS</span><h2 id="executive-title">Projeto executivo<span class="heading-period">.</span></h2></div>${item.executiveSoftware?.trim() ? `<div class="detail-plans__credit"><span>FEITO NO</span><strong>${escapeText(item.executiveSoftware.trim())}</strong></div>` : ""}</div><div class="other-detail__executive-grid">${item.executiveImages.map((image, index) => `<a class="other-detail__image" href="${image.src}" data-lightbox aria-label="Ampliar ${escapeText(image.label || `imagem ${index + 1}`)} do projeto executivo no visualizador"><img src="${image.src}" alt="${escapeText(image.label || `Imagem ${index + 1}`)} do projeto executivo de ${escapeText(item.title)}" loading="lazy" decoding="async" /><span>${escapeText(image.label || `Imagem ${index + 1}`)} <span aria-hidden="true">↗</span></span></a>`).join("")}</div></section>` : ""}
-    ${item.tool ? `<div class="detail-photos__credit"><span>RENDERIZADO POR</span><strong>${escapeText(item.tool)}</strong></div>` : ""}
-    <a class="other-detail__hero" href="${item.images[0].src}" data-lightbox aria-label="Ampliar ${imageLabel(0)} no visualizador"><img src="${item.images[0].src}" alt="${imageLabel(0)}, visualização com ${item.tool}"${item.images[0].width && item.images[0].height ? ` width="${item.images[0].width}" height="${item.images[0].height}"` : ""} fetchpriority="high" /></a>
-    <div class="other-detail__gallery-head"><span class="eyebrow">GALERIA · ${item.tool.toUpperCase()}</span><h2>Imagens<span class="heading-period">.</span></h2></div>
-    <div class="other-detail__gallery">${item.images.slice(1).map((image, index) => `<a class="other-detail__image" href="${image.src}" data-lightbox aria-label="Ampliar ${imageLabel(index + 1)} no visualizador"><img src="${image.src}" alt="${imageLabel(index + 1)}, visualização com ${item.tool}"${image.width && image.height ? ` width="${image.width}" height="${image.height}"` : ""} loading="lazy" decoding="async" /><span>${String(index + 2).padStart(2, "0")} / ${String(item.images.length).padStart(2, "0")} <span aria-hidden="true">↗</span></span></a>`).join("")}</div>
-    <div class="detail-next"><span>PRÓXIMO EM OUTROS PROJETOS</span><a href="/outros-projetos/${next.slug}/">${next.title}<span aria-hidden="true">↗</span></a></div>
-  </div></main>${footer()}`;
+  detailPage(item, "other");
 }
 
 function setupLightbox() {

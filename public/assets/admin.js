@@ -1,19 +1,19 @@
 import { projects as baselineProjects } from "./data.js";
 import { otherProjects as baselineOther } from "./other-projects.js";
-import { normalizeProject } from "./project-normalize.js";
+import { normalizeProject, normalizeOtherProject } from "./project-normalize.js";
 
 const root = document.querySelector("#admin-app");
 const escape = (value = "") => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
-let entries = { project: baselineProjects.map(normalizeProject), other: [...baselineOther] };
+let entries = { project: baselineProjects.map(normalizeProject), other: baselineOther.map(normalizeOtherProject) };
 let currentKind = "project";
-let selectedSlug = null;
+let selectedSlug = entries.project[0]?.slug || null;
 let status = "";
 let confirmDelete = false;
 const imageStates = new WeakMap();
 const imageFileFields = { images: "imageFiles", plans: "planFiles", diagrams: "diagramFiles", executiveImages: "executiveFiles" };
 
 async function load() {
-  entries = { project: baselineProjects.map(normalizeProject), other: [...baselineOther] };
+  entries = { project: baselineProjects.map(normalizeProject), other: baselineOther.map(normalizeOtherProject) };
   const response = await fetch("/api/items", { cache: "no-store" });
   if (!response.ok) throw new Error("Não foi possível carregar os projetos.");
   const { items } = await response.json();
@@ -21,8 +21,8 @@ async function load() {
     const list = entries[kind];
     const index = list.findIndex((entry) => entry.slug === slug);
     if (deleted && index >= 0) list.splice(index, 1);
-    else if (!deleted && index >= 0) list[index] = kind === "project" ? normalizeProject(item) : item;
-    else if (!deleted) list.push(kind === "project" ? normalizeProject(item) : item);
+    else if (!deleted && index >= 0) list[index] = kind === "project" ? normalizeProject(item) : normalizeOtherProject(item);
+    else if (!deleted) list.push(kind === "project" ? normalizeProject(item) : normalizeOtherProject(item));
   }
   render();
 }
@@ -52,27 +52,56 @@ function savedImageItems(form, field) {
   });
 }
 
+function field(label, name, value = "", options = "", hint = "") {
+  return `<label><span class="manager__field-label">${label}</span><input name="${name}" value="${escape(value)}" ${options}>${hint ? `<small>${hint}</small>` : ""}</label>`;
+}
+
+function imageEditor(item, name, title, hint) {
+  const fileName = imageFileFields[name];
+  return `<div class="manager__image-editor"><div class="manager__upload"><div><strong>Adicionar ${title.toLowerCase()}</strong><p>${hint}</p><small>JPG, PNG, WebP ou AVIF · até 15 MB por imagem</small></div><label class="manager__file-label">Escolher imagens<input name="${fileName}" type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple></label></div><div class="manager__previews" data-previews="${name}"></div><details class="manager__advanced"><summary>Adicionar ou editar por links</summary><label>Links das imagens<textarea name="${name}" rows="4" placeholder="Nome da imagem | https://…">${escape(imageLines(item?.[name] || [], name))}</textarea><small>Uma imagem por linha, no formato Nome | Link. Você também pode usar o botão “Escolher imagens”.</small></label></details></div>`;
+}
+
+function editorSection(number, id, title, description, content) {
+  return `<section class="manager__section" id="${id}"><div class="manager__section-heading"><span>${number}</span><div><h3>${title}</h3><p>${description}</p></div></div><div class="manager__section-body">${content}</div></section>`;
+}
+
+let hasUnsavedChanges = false;
+const isLocalPreview = ["127.0.0.1", "localhost"].includes(location.hostname);
+const leaveEditor = () => !hasUnsavedChanges || window.confirm("Há alterações não salvas. Deseja descartá-las e continuar?");
+window.addEventListener("beforeunload", (event) => { if (hasUnsavedChanges) { event.preventDefault(); event.returnValue = ""; } });
+
 function render() {
   const list = entries[currentKind];
   const item = list.find((entry) => entry.slug === selectedSlug);
-  root.innerHTML = `<main class="manager"><header class="manager__header"><a href="/">← PORTFÓLIO</a><span>GABRIELA MORAES / GERENCIAR</span><a href="/signout-with-chatgpt?return_to=%2Fgerenciar" target="_top">SAIR</a></header>
-    <div class="manager__intro"><p class="eyebrow">ÁREA DA PROPRIETÁRIA</p><h1>Gerenciar<br><em>projetos.</em></h1><p>Crie, edite e remova projetos. As alterações são publicadas no portfólio imediatamente.</p></div>
-    <div class="manager__tabs" role="tablist"><button data-kind="project" class="${currentKind === "project" ? "is-active" : ""}">PROJETOS (${entries.project.length})</button><button data-kind="other" class="${currentKind === "other" ? "is-active" : ""}">OUTROS PROJETOS (${entries.other.length})</button></div>
-    <div class="manager__grid"><aside class="manager__list"><button class="manager__new" data-new>+ NOVO PROJETO</button>${list.map((entry) => `<button class="manager__item ${entry.slug === selectedSlug ? "is-active" : ""}" data-edit="${escape(entry.slug)}"><span>${escape(entry.title)}</span><small>${escape(currentKind === "project" ? entry.category : entry.tool)}</small></button>`).join("")}</aside>
-    <section class="manager__editor"><div class="manager__editor-head"><div><p class="eyebrow">${item ? "EDITAR" : "CRIAR"} / ${currentKind === "project" ? "PROJETOS" : "OUTROS PROJETOS"}</p><h2>${item ? escape(item.title) : "Novo projeto"}</h2></div>${item ? `<button class="manager__delete" data-delete>${confirmDelete ? "CONFIRMAR EXCLUSÃO" : "EXCLUIR"}</button>` : ""}</div>
-      <form id="manager-form"><div class="manager__fields"><label>TÍTULO<input name="title" value="${escape(item?.title || "")}" required maxlength="160"></label><label>ENDEREÇO DA PÁGINA<input name="slug" value="${escape(item?.slug || "")}" ${item ? "readonly" : ""} required pattern="[a-z0-9]+(-[a-z0-9]+)*"><small>Gerado do título; pode ser ajustado antes de salvar.</small></label>
-      ${currentKind === "project" ? `<label>CATEGORIA<input name="category" value="${escape(item?.category || "")}" required></label><label>ANO<input name="year" value="${escape(item?.year || "")}"></label><label>LOCAL<input name="location" value="${escape(item?.location || "")}"></label><label>DISCIPLINA<input name="discipline" value="${escape(item?.discipline || "")}"></label><label>SOFTWARE DAS PLANTAS<input name="renderSoftware" value="${escape(item?.renderSoftware || "")}" maxlength="160" placeholder="Ex.: Revit"></label><label>SOFTWARE DOS DIAGRAMAS<input name="diagramSoftware" value="${escape(item?.diagramSoftware || "")}" maxlength="160" placeholder="Ex.: Revit"></label><label>SOFTWARE DAS FOTOS<input name="photoSoftware" value="${escape(item?.photoSoftware || "")}" maxlength="160" placeholder="Ex.: Enscape"></label><label class="manager__full">DESCRIÇÃO<textarea name="description" rows="6" placeholder="Um parágrafo por linha">${escape(item?.description?.join("\n") || "")}</textarea></label><label class="manager__full">CAPA<input name="cover" value="${escape(item?.cover || "")}" placeholder="URL da imagem"><input name="coverFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif"><small>Envie uma imagem ou cole uma URL HTTPS.</small><span class="manager__previews" data-previews="cover"></span></label><label class="manager__full">DIAGRAMAS<textarea name="diagrams" rows="4" placeholder="Nome | URL, uma por linha">${escape(imageLines(item?.diagrams || [], "diagrams"))}</textarea><span class="manager__previews" data-previews="diagrams"></span></label><label class="manager__full">ENVIAR DIAGRAMAS<input name="diagramFiles" type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple></label><label class="manager__full">PLANTAS TÉCNICAS<textarea name="plans" rows="4" placeholder="Nome | URL, uma por linha">${escape(imageLines(item?.plans || [], "plans"))}</textarea><span class="manager__previews" data-previews="plans"></span></label><label class="manager__full">ENVIAR PLANTAS<input name="planFiles" type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple></label>` : `<label>SOFTWARE UTILIZADO<input name="tool" value="${escape(item?.tool || "")}" required placeholder="Ex.: Enscape"></label>`}
-      <label class="manager__full">IMAGENS DA GALERIA<textarea name="images" rows="7" placeholder="Nome | URL, uma por linha">${escape(imageLines(item?.images || []))}</textarea><small>A primeira imagem será a capa em Outros projetos.</small><span class="manager__previews" data-previews="images"></span></label><label class="manager__full">ENVIAR IMAGENS<input name="imageFiles" type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple></label>
-      ${currentKind === "other" ? `<label class="manager__full">SOBRE O PROJETO (OPCIONAL)<textarea name="description" rows="6" maxlength="5000" placeholder="Escreva sobre o projeto, se desejar">${escape(item?.description || "")}</textarea></label><label>SOFTWARE DOS DESENHOS TÉCNICOS<input name="executiveSoftware" value="${escape(item?.executiveSoftware || "")}" maxlength="160" placeholder="Ex.: Revit"></label><label class="manager__full">PROJETO EXECUTIVO<textarea name="executiveImages" rows="4" placeholder="Nome | URL, uma por linha">${escape(imageLines(item?.executiveImages || []))}</textarea><small>Esta seção só aparecerá no projeto quando houver imagens.</small><span class="manager__previews" data-previews="executiveImages"></span></label><label class="manager__full">ENVIAR IMAGENS DO PROJETO EXECUTIVO<input name="executiveFiles" type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple></label>` : ""}</div>
-      <div class="manager__actions"><button type="submit">SALVAR PROJETO ↗</button><span role="status" id="manager-status">${escape(status)}</span></div></form></section></div></main>`;
-  root.querySelectorAll("[data-kind]").forEach((button) => button.addEventListener("click", () => { currentKind = button.dataset.kind; selectedSlug = null; status = ""; confirmDelete = false; render(); }));
-  root.querySelectorAll("[data-edit]").forEach((button) => button.addEventListener("click", () => { selectedSlug = button.dataset.edit; status = ""; confirmDelete = false; render(); }));
-  root.querySelector("[data-new]").addEventListener("click", () => { selectedSlug = null; status = ""; confirmDelete = false; render(); });
-  root.querySelector("[data-delete]")?.addEventListener("click", () => { if (!confirmDelete) { confirmDelete = true; status = "Clique novamente para excluir este projeto."; render(); } else remove(); });
-  const form = root.querySelector("#manager-form");
-  form.elements.title.addEventListener("input", () => { if (!selectedSlug) form.elements.slug.value = slugify(form.elements.title.value); });
-  setupImagePreviews(form);
-  form.addEventListener("submit", save);
+  const academic = currentKind === "project";
+  const info = `<div class="manager__fields">${field('Título do projeto <span class="manager__required">*</span>', "title", item?.title, 'required maxlength="160" placeholder="Ex.: Hall · Musik"')}${field(academic ? 'Tipo de arquitetura <span class="manager__required">*</span>' : "Tipo de arquitetura", "category", item?.category, `${academic ? "required" : ""} maxlength="160" placeholder="Ex.: Arquitetura de interiores"`, "Aparece abaixo do título na página inicial.")}${field("Ano", "year", item?.year, 'maxlength="30" placeholder="Ex.: 2026"')}${field("Local", "location", item?.location, 'maxlength="160" placeholder="Ex.: Juiz de Fora — MG"')}${field(academic ? "Disciplina" : "Participação / etapa", "discipline", item?.discipline, 'maxlength="160"', academic ? "" : "Ex.: Estágio — projeto executivo e renderização.")}<label class="manager__full">Sobre o projeto<textarea name="description" rows="4" ${academic ? "" : 'maxlength="5000"'} placeholder="Conte o objetivo, as ideias e sua participação no projeto.">${escape(Array.isArray(item?.description) ? item.description.join("\n") : item?.description || "")}</textarea><small>Separe os parágrafos com uma quebra de linha. Esta seção só aparece quando preenchida.</small></label></div><details class="manager__advanced"><summary>Endereço da página</summary>${field("Nome no endereço", "slug", item?.slug, `${item ? "readonly" : ""} required pattern="[a-z0-9]+(-[a-z0-9]+)*"`, item ? "Definido na criação para preservar o link deste projeto." : "Preenchido automaticamente pelo título. Use apenas letras minúsculas, números e hífens.")}</details>`;
+  const cover = `<div class="manager__cover-editor"><h4>Capa do projeto</h4><p>A imagem que aparece na página inicial e na abertura do projeto.${academic ? "" : " Se não escolher uma capa, será usada a primeira imagem da galeria."}</p><label class="manager__upload manager__cover-upload"><span><strong>Escolher uma capa</strong><small>JPG, PNG, WebP ou AVIF · até 15 MB</small></span><input name="coverFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif"></label><div class="manager__previews" data-previews="cover"></div><details class="manager__advanced"><summary>Usar um link para a capa</summary>${field("Link da imagem", "cover", item?.cover, 'placeholder="https://…"')}</details></div>`;
+  const gallery = `${cover}<div class="manager__fields manager__software">${field(academic ? "Software dos renders" : 'Software dos renders <span class="manager__required">*</span>', "photoSoftware", item?.photoSoftware || item?.tool, `${academic ? "" : "required"} maxlength="100" placeholder="Ex.: Enscape ou IA"`, "Aparece como crédito ao lado do título Renders.")}</div>${imageEditor(item, "images", "Renders", "Fotos e renders exibidos após os desenhos técnicos. Organize a ordem pelas miniaturas.")}`;
+  const drawings = `<div class="manager__subsection"><h4>Diagramas</h4><div class="manager__fields">${field("Software dos diagramas", "diagramSoftware", item?.diagramSoftware, 'maxlength="160" placeholder="Ex.: Revit"')}</div>${imageEditor(item, "diagrams", "Diagramas", "Estudos, esquemas e diagramas conceituais.")}</div><div class="manager__subsection"><h4>Desenhos técnicos</h4><div class="manager__fields">${field("Software dos desenhos técnicos", "renderSoftware", item?.renderSoftware, 'maxlength="160" placeholder="Ex.: Revit"')}</div>${imageEditor(item, "plans", "Desenhos técnicos", "Plantas, cortes, fachadas e detalhamentos.")}</div>`;
+  root.innerHTML = `<main class="manager"><header class="manager__header"><a href="/">← Voltar ao portfólio</a><span>GABRIELA MORAES / PAINEL DE EDIÇÃO</span><a href="/signout-with-chatgpt?return_to=%2Fgerenciar" target="_top">Sair ↗</a></header>
+  <div class="manager__intro"><div><p class="eyebrow">SEU PORTFÓLIO, DO SEU JEITO</p><h1>Gerenciar <em>projetos.</em></h1><p>Escolha um projeto, edite as informações e salve quando terminar.</p></div><div class="manager__guide"><span><b>01</b> Escolha o projeto</span><span><b>02</b> Edite textos e imagens</span><span><b>03</b> Salve as alterações</span></div></div>
+  ${isLocalPreview ? '<div class="manager__notice"><strong>Você está na prévia local.</strong><span>As edições feitas aqui não alteram o site publicado.</span></div>' : ""}
+  <div class="manager__tabs" role="tablist" aria-label="Tipo de projeto"><button role="tab" aria-selected="${academic}" data-kind="project" class="${academic ? "is-active" : ""}">Projetos acadêmicos <span>${entries.project.length}</span></button><button role="tab" aria-selected="${!academic}" data-kind="other" class="${!academic ? "is-active" : ""}">Outros projetos <span>${entries.other.length}</span></button></div>
+  <div class="manager__grid"><aside class="manager__sidebar"><div class="manager__sidebar-head"><h2>Seus projetos</h2><span>${String(list.length).padStart(2,"0")}</span></div><button class="manager__new" data-new>+ Criar novo projeto</button><label class="manager__search">Buscar projeto<input type="search" placeholder="Digite o nome…" data-search></label><div class="manager__list">${list.map(entry=>`<button type="button" class="manager__item ${entry.slug===selectedSlug ? "is-active" : ""}" data-edit="${escape(entry.slug)}" ${entry.slug===selectedSlug ? 'aria-current="true"' : ""}><img src="${escape(entry.cover || entry.images?.[0]?.src || "")}" alt="" loading="lazy"><span><strong>${escape(entry.title)}</strong><small>${escape(entry.category || (academic ? "Projeto acadêmico" : entry.tool))}</small></span><i aria-hidden="true">↗</i></button>`).join("")}<p class="manager__no-results" hidden>Nenhum projeto encontrado.</p></div><p class="manager__sidebar-note">Selecione um projeto da lista ou crie um novo para começar.</p></aside>
+  <section class="manager__editor" aria-label="Editor de projeto"><div class="manager__editor-head"><div><p class="eyebrow">${item ? "EDITANDO" : "NOVO PROJETO"} · ${academic ? "ACADÊMICO" : "OUTROS PROJETOS"}</p><h2>${item ? escape(item.title) : "Vamos criar um projeto"}</h2><p>Campos com <span class="manager__required">*</span> são obrigatórios.</p></div>${item ? `<a class="manager__view" href="/${academic ? "projetos" : "outros-projetos"}/${escape(item.slug)}/" target="_blank" rel="noopener">Ver no portfólio ↗</a>` : ""}</div>
+  <nav class="manager__section-nav" aria-label="Seções do formulário"><a href="#manager-info">01 Informações</a><a href="#manager-images">02 Capa e renders</a><a href="#manager-drawings">03 Desenhos técnicos</a></nav>
+  <form id="manager-form">${editorSection("01", "manager-info", "Informações do projeto", "Os textos que apresentam seu trabalho no portfólio.", info)}${editorSection("02", "manager-images", "Capa e renders", "Envie as imagens e organize a sequência de apresentação.", gallery)}${editorSection("03", "manager-drawings", "Desenhos técnicos", "Opcional. Esta parte só aparece no site quando houver conteúdo.", drawings)}
+  <div class="manager__actions"><div><span class="manager__save-indicator" aria-hidden="true"></span><span role="status" id="manager-status">${escape(status || "Nenhuma alteração pendente.")}</span></div><button type="submit">Salvar alterações <span aria-hidden="true">↗</span></button></div></form>
+  ${item ? `<details class="manager__danger"><summary>Remover este projeto</summary><p>O projeto e sua galeria deixarão de aparecer no portfólio. Esta ação precisa ser confirmada.</p><button type="button" class="manager__delete" data-delete>${confirmDelete ? "Confirmar exclusão do projeto" : "Excluir projeto"}</button>${confirmDelete ? '<p role="status">Clique novamente no botão para confirmar a exclusão.</p>' : ""}</details>` : ""}</section></div></main>`;
+  const changeView = (action) => { if (!leaveEditor()) return; hasUnsavedChanges=false; status=""; confirmDelete=false; action(); render(); };
+  root.querySelectorAll("[data-kind]").forEach(button=>button.addEventListener("click",()=>{ if(currentKind===button.dataset.kind)return;changeView(()=>{currentKind=button.dataset.kind;selectedSlug=entries[currentKind][0]?.slug || null;}); }));
+  root.querySelectorAll("[data-edit]").forEach(button=>button.addEventListener("click",()=>{if(selectedSlug===button.dataset.edit)return;changeView(()=>{selectedSlug=button.dataset.edit;});}));
+  root.querySelector("[data-new]").addEventListener("click",()=>changeView(()=>{selectedSlug=null;}));
+  root.querySelector("[data-search]").addEventListener("input",event=>{const query=slugify(event.target.value);let count=0;root.querySelectorAll("[data-edit]").forEach(button=>{button.hidden=!slugify(button.textContent).includes(query);if(!button.hidden)count++;});root.querySelector(".manager__no-results").hidden=!!count;});
+  root.querySelector("[data-delete]")?.addEventListener("click",()=>{if(!confirmDelete){confirmDelete=true;const zone=root.querySelector(".manager__danger");zone.querySelector("[data-delete]").textContent="Confirmar exclusão do projeto";const message=document.createElement("p");message.setAttribute("role","status");message.textContent="Clique novamente no botão para confirmar a exclusão.";zone.append(message);}else remove();});
+  const form=root.querySelector("#manager-form");
+  const markChanged=()=>{hasUnsavedChanges=true;const output=form.querySelector("#manager-status");output.textContent="Você tem alterações para salvar.";output.classList.remove("is-error");form.querySelector(".manager__save-indicator").classList.add("is-pending");};
+  form.elements.title.addEventListener("input",()=>{if(!selectedSlug)form.elements.slug.value=slugify(form.elements.title.value);});
+  form.addEventListener("input",markChanged);form.addEventListener("change",markChanged);
+  form.addEventListener("click",event=>{if(event.target.closest(".manager__preview button"))markChanged();});
+  form.addEventListener("drop",event=>{if(event.target.closest(".manager__preview"))markChanged();});
+  form.addEventListener("invalid",event=>{const hidden=event.target.closest("details");if(hidden)hidden.open=true;},true);
+  setupImagePreviews(form);form.addEventListener("submit",save);
 }
 
 function setupImagePreviews(form) {
@@ -226,30 +255,30 @@ async function save(event) {
     if (!selectedSlug && entries[currentKind].some((entry) => entry.slug === slug)) throw new Error("Já existe um projeto com este endereço.");
     const images = await orderedImages(form, "images");
     const item = { id: selectedSlug ? entries[currentKind].find((entry) => entry.slug === selectedSlug)?.id : String(entries[currentKind].length + 1).padStart(2, "0"), slug, title: String(values.get("title") || "").trim(), images };
-    if (currentKind === "project") {
-      item.category = String(values.get("category") || "").trim();
-      item.year = String(values.get("year") || "").trim();
-      item.location = String(values.get("location") || "").trim();
-      item.discipline = String(values.get("discipline") || "").trim();
-      item.renderSoftware = String(values.get("renderSoftware") || "").trim();
-      item.diagramSoftware = String(values.get("diagramSoftware") || "").trim();
-      item.photoSoftware = String(values.get("photoSoftware") || "").trim();
-      item.description = String(values.get("description") || "").split("\n").map((line) => line.trim()).filter(Boolean);
-      if (!form.elements.coverFile.files[0] && !String(values.get("cover") || "").trim()) throw new Error("Adicione uma imagem de capa.");
-      item.cover = form.elements.coverFile.files[0] ? await upload(form.elements.coverFile.files[0]) : String(values.get("cover") || "").trim();
-      item.plans = await orderedImages(form, "plans");
-      item.diagrams = await orderedImages(form, "diagrams");
-    } else {
-      item.tool = String(values.get("tool") || "").trim();
-      item.description = String(values.get("description") || "").trim();
-      item.executiveSoftware = String(values.get("executiveSoftware") || "").trim();
-      item.executiveImages = await orderedImages(form, "executiveImages");
+    item.category = String(values.get("category") || "").trim();
+    item.year = String(values.get("year") || "").trim();
+    item.location = String(values.get("location") || "").trim();
+    item.discipline = String(values.get("discipline") || "").trim();
+    item.renderSoftware = String(values.get("renderSoftware") || "").trim();
+    item.diagramSoftware = String(values.get("diagramSoftware") || "").trim();
+    item.photoSoftware = String(values.get("photoSoftware") || "").trim();
+    const description = String(values.get("description") || "").trim();
+    item.description = currentKind === "project" ? description.split("\n").map(line => line.trim()).filter(Boolean) : description;
+    const cover = String(values.get("cover") || "").trim();
+    if (currentKind === "project" && !form.elements.coverFile.files[0] && !cover) throw new Error("Adicione uma imagem de capa.");
+    item.cover = form.elements.coverFile.files[0] ? await upload(form.elements.coverFile.files[0]) : cover || images[0]?.src || "";
+    item.plans = await orderedImages(form, "plans");
+    item.diagrams = await orderedImages(form, "diagrams");
+    if (currentKind === "other") {
+      item.tool = item.photoSoftware;
+      item.executiveSoftware = item.renderSoftware;
+      item.executiveImages = item.plans;
     }
     const response = await fetch("/api/items", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: currentKind, slug, item }) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "Não foi possível salvar.");
-    selectedSlug = slug; status = "Projeto salvo."; await load();
-  } catch (error) { output.textContent = error.message; button.disabled = false; }
+    selectedSlug = slug; hasUnsavedChanges = false; status = isLocalPreview ? "Alterações salvas nesta prévia local." : "Alterações salvas no portfólio."; await load();
+  } catch (error) { output.textContent = error.message; output.classList.add("is-error"); button.disabled = false; }
 }
 
 async function remove() {
@@ -257,7 +286,7 @@ async function remove() {
   if (!item) return;
   const response = await fetch("/api/items", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: currentKind, slug: selectedSlug }) });
   if (!response.ok) { status = "Não foi possível excluir."; render(); return; }
-  selectedSlug = null; confirmDelete = false; status = "Projeto excluído."; await load();
+  selectedSlug = null; hasUnsavedChanges = false; confirmDelete = false; status = "Projeto excluído."; await load();
 }
 
 load().catch((error) => { root.innerHTML = `<main class="manager"><h1>Não foi possível abrir o gerenciador.</h1><p>${escape(error.message)}</p><a href="/">Voltar ao portfólio</a></main>`; });
