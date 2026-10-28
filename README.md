@@ -1,13 +1,29 @@
 # Portfólio de Gabriela Moraes
 
-Protótipo estático, responsivo e navegável. Abra `dist/index.html` por um servidor local para usar os módulos JavaScript.
+Site em Next.js, com projetos acadêmicos, outros projetos e painel de edição em `/gerenciar`.
 
-## Adicionar imagens
+## Desenvolvimento e build
 
-Os três projetos principais são Domus Residence, Sky Garden Corporate Tower e Escola Acolher. Suas imagens estão em `dist/images/projects/`, com `cover.jpg` para a capa, arquivos numerados para a galeria e `plan-*.jpg` para plantas, diagramas e cortes extraídos do portfólio fornecido. A foto de perfil está em `dist/images/profile/gabriela-profile.jpg`. Caminhos, títulos e descrições dos projetos principais ficam em `dist/assets/data.js`.
+Use Node.js 24 e a versão do pnpm declarada em `package.json`.
 
-Para trocar, retirar ou acrescentar uma imagem na página de um projeto principal, edite o array `images` ou `plans` desse projeto em `data.js`. As plantas podem ser abertas em tamanho maior. As redes sociais também ficam configuráveis em `data.js`.
+```sh
+pnpm install --frozen-lockfile
+pnpm dev
+pnpm build
+pnpm start
+```
 
-"Outros projetos" reúne sete galerias com 64 imagens das pastas fornecidas, convertidas para WebP em `dist/images/other-projects/`. A primeira imagem de cada galeria serve de capa. Títulos, ferramenta (Enscape ou IA), caminhos e dimensões ficam em `dist/assets/other-projects.js`; as páginas correspondentes estão em `dist/outros-projetos/`.
+O build gera o módulo de envio direto de imagens e a aplicação Next.js. `vercel.json` contém as configurações de publicação. Os arquivos gerados, dependências, caches e segredos ficam fora do Git.
 
-O formulário abre um rascunho no aplicativo de e-mail do visitante. Ele não depende de servidor nem anuncia um envio que não ocorreu.
+## Configuração na Vercel
+
+- `ADMIN_PASSWORD`: senha secreta do painel, com pelo menos 12 caracteres. Configure somente nas variáveis da hospedagem; não inclua no código.
+- Conecte um Vercel Blob privado ao projeto. A integração fornece `BLOB_READ_WRITE_TOKEN` ou `BLOB_STORE_ID` com OIDC.
+
+O painel utiliza uma sessão criptografada com cookie HttpOnly. Alterações de conteúdo e uploads exigem autenticação e origem válida. O acesso público ao portfólio continua independente do login do painel.
+
+Cada projeto editado fica em um registro próprio no Blob. O site lê esses registros a cada abertura e combina as alterações com os projetos originais de `public/assets/data.js` e `public/assets/other-projects.js`. Exclusões são registradas sem apagar as imagens existentes.
+
+As imagens são enviadas diretamente ao armazenamento, com limite de 15 MB e formatos JPG, PNG, WebP ou AVIF. A aplicação serve as imagens pela rota `/api/media/`.
+
+As seções de projetos acadêmicos e outros projetos compartilham o mesmo layout: capa, apresentação, ficha técnica, diagramas, desenhos técnicos e renders. O formulário de contato prepara uma mensagem no aplicativo de e-mail do visitante.

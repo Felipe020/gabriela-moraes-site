@@ -1,12 +1,9 @@
-import { env } from "cloudflare:workers";
+import { authorized } from "../../../lib/admin-auth";
+import { readPortfolio, savePortfolio } from "../../../lib/portfolio-store";
 
 export const dynamic = "force-dynamic";
 const ownerEmail = "gabrielasmoraes8@gmail.com";
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
-
-function authorized(request: Request) {
-  return Boolean(request.headers.get("oai-authenticated-user-id")) && request.headers.get("oai-authenticated-user-email")?.toLowerCase() === ownerEmail;
-}
 
 function validText(value: unknown, max = 3000) {
   return typeof value === "string" && value.trim().length > 0 && value.length <= max && !/[<>\"]/.test(value);
@@ -36,29 +33,23 @@ function validate(body: any) {
 }
 
 export async function GET() {
-  if (!env.DB) return json({ error: "Banco de dados indisponível" }, 503);
-  const result = await env.DB.prepare("SELECT kind, slug, content, deleted FROM portfolio_items ORDER BY updated_at ASC").all();
-  return json({ items: result.results.map((row: any) => ({ kind: row.kind, slug: row.slug, item: JSON.parse(row.content), deleted: !!row.deleted })) });
+  try { return json({ items: await readPortfolio() }); } catch { return json({ error: "Não foi possível carregar os projetos salvos." }, 503); }
 }
 
 export async function PUT(request: Request) {
-  if (!authorized(request)) return json({ error: "Acesso restrito à proprietária." }, 403);
-  if (!env.DB) return json({ error: "Banco de dados indisponível" }, 503);
+  if (!await authorized(request)) return json({ error: "Acesso restrito à proprietária." }, 403);
   let body: any;
   try { body = await request.json(); } catch { return json({ error: "Dados inválidos." }, 400); }
   if (!validate(body)) return json({ error: "Confira os campos e imagens do projeto." }, 400);
-  await env.DB.prepare("INSERT INTO portfolio_items (kind, slug, content, deleted, updated_at) VALUES (?, ?, ?, 0, ?) ON CONFLICT(kind, slug) DO UPDATE SET content=excluded.content, deleted=0, updated_at=excluded.updated_at")
-    .bind(body.kind, body.slug, JSON.stringify(body.item), new Date().toISOString()).run();
+  try { await savePortfolio({ kind: body.kind, slug: body.slug, item: body.item, deleted: false }); } catch { return json({ error: "Não foi possível salvar. Suas alterações não foram gravadas." }, 503); }
   return json({ ok: true });
 }
 
 export async function DELETE(request: Request) {
-  if (!authorized(request)) return json({ error: "Acesso restrito à proprietária." }, 403);
-  if (!env.DB) return json({ error: "Banco de dados indisponível" }, 503);
+  if (!await authorized(request)) return json({ error: "Acesso restrito à proprietária." }, 403);
   let body: any;
   try { body = await request.json(); } catch { return json({ error: "Dados inválidos." }, 400); }
   if (!["project", "other"].includes(body?.kind) || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(body?.slug || "")) return json({ error: "Projeto inválido." }, 400);
-  await env.DB.prepare("INSERT INTO portfolio_items (kind, slug, content, deleted, updated_at) VALUES (?, ?, '{}', 1, ?) ON CONFLICT(kind, slug) DO UPDATE SET deleted=1, updated_at=excluded.updated_at")
-    .bind(body.kind, body.slug, new Date().toISOString()).run();
+  try { await savePortfolio({ kind: body.kind, slug: body.slug, item: {}, deleted: true }); } catch { return json({ error: "Não foi possível excluir o projeto." }, 503); }
   return json({ ok: true });
 }

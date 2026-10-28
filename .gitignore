@@ -64,3 +64,6 @@ next-env.d.ts
 Thumbs.db
 *.log
 
+
+/.pnpm-store/
+/public/assets/blob-upload.js

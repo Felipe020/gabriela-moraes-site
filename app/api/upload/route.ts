@@ -1,12 +1,17 @@
-import { env } from "cloudflare:workers";
-
+import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
+import { authorized } from "../../../lib/admin-auth";
+export const runtime = "nodejs";
 export async function POST(request: Request) {
-  if (!request.headers.get("oai-authenticated-user-id") || request.headers.get("oai-authenticated-user-email")?.toLowerCase() !== "gabrielasmoraes8@gmail.com") return Response.json({ error: "Acesso restrito à proprietária." }, { status: 403 });
-  if (!env.BUCKET) return Response.json({ error: "Armazenamento indisponível." }, { status: 503 });
-  const form = await request.formData();
-  const file = form.get("file");
-  if (!(file instanceof File) || !["image/jpeg", "image/png", "image/webp", "image/avif"].includes(file.type) || file.size > 15_000_000 || file.size === 0) return Response.json({ error: "Use uma imagem JPG, PNG, WebP ou AVIF de até 15 MB." }, { status: 400 });
-  const key = crypto.randomUUID();
-  await env.BUCKET.put(key, file.stream(), { httpMetadata: { contentType: file.type } });
-  return Response.json({ url: `/api/media/${key}` });
+  try {
+    const body = await request.json() as HandleUploadBody;
+    const result = await handleUpload({ body, request,
+      onBeforeGenerateToken: async (pathname) => {
+        if (!await authorized(request)) throw new Error("Entre no painel para enviar imagens.");
+        if (!/^media\/[0-9a-f-]{36}$/.test(pathname)) throw new Error("Endereço da imagem inválido.");
+        return { allowedContentTypes: ["image/jpeg", "image/png", "image/webp", "image/avif"], maximumSizeInBytes: 15000000, addRandomSuffix: false, allowOverwrite: false, validUntil: Date.now() + 5 * 60 * 1000 };
+      },
+      onUploadCompleted: async () => {},
+    });
+    return Response.json(result);
+  } catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Falha no envio da imagem." }, { status: 400 }); }
 }

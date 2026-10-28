@@ -78,7 +78,7 @@ function render() {
   const cover = `<div class="manager__cover-editor"><h4>Capa do projeto</h4><p>A imagem que aparece na página inicial e na abertura do projeto.${academic ? "" : " Se não escolher uma capa, será usada a primeira imagem da galeria."}</p><label class="manager__upload manager__cover-upload"><span><strong>Escolher uma capa</strong><small>JPG, PNG, WebP ou AVIF · até 15 MB</small></span><input name="coverFile" type="file" accept="image/jpeg,image/png,image/webp,image/avif"></label><div class="manager__previews" data-previews="cover"></div><details class="manager__advanced"><summary>Usar um link para a capa</summary>${field("Link da imagem", "cover", item?.cover, 'placeholder="https://…"')}</details></div>`;
   const gallery = `${cover}<div class="manager__fields manager__software">${field(academic ? "Software dos renders" : 'Software dos renders <span class="manager__required">*</span>', "photoSoftware", item?.photoSoftware || item?.tool, `${academic ? "" : "required"} maxlength="100" placeholder="Ex.: Enscape ou IA"`, "Aparece como crédito ao lado do título Renders.")}</div>${imageEditor(item, "images", "Renders", "Fotos e renders exibidos após os desenhos técnicos. Organize a ordem pelas miniaturas.")}`;
   const drawings = `<div class="manager__subsection"><h4>Diagramas</h4><div class="manager__fields">${field("Software dos diagramas", "diagramSoftware", item?.diagramSoftware, 'maxlength="160" placeholder="Ex.: Revit"')}</div>${imageEditor(item, "diagrams", "Diagramas", "Estudos, esquemas e diagramas conceituais.")}</div><div class="manager__subsection"><h4>Desenhos técnicos</h4><div class="manager__fields">${field("Software dos desenhos técnicos", "renderSoftware", item?.renderSoftware, 'maxlength="160" placeholder="Ex.: Revit"')}</div>${imageEditor(item, "plans", "Desenhos técnicos", "Plantas, cortes, fachadas e detalhamentos.")}</div>`;
-  root.innerHTML = `<main class="manager"><header class="manager__header"><a href="/">← Voltar ao portfólio</a><span>GABRIELA MORAES / PAINEL DE EDIÇÃO</span><a href="/signout-with-chatgpt?return_to=%2Fgerenciar" target="_top">Sair ↗</a></header>
+  root.innerHTML = `<main class="manager"><header class="manager__header"><a href="/">← Voltar ao portfólio</a><span>GABRIELA MORAES / PAINEL DE EDIÇÃO</span><form action="/api/admin/logout" method="post"><button type="submit" class="manager__logout">Sair ↗</button></form></header>
   <div class="manager__intro"><div><p class="eyebrow">SEU PORTFÓLIO, DO SEU JEITO</p><h1>Gerenciar <em>projetos.</em></h1><p>Escolha um projeto, edite as informações e salve quando terminar.</p></div><div class="manager__guide"><span><b>01</b> Escolha o projeto</span><span><b>02</b> Edite textos e imagens</span><span><b>03</b> Salve as alterações</span></div></div>
   ${isLocalPreview ? '<div class="manager__notice"><strong>Você está na prévia local.</strong><span>As edições feitas aqui não alteram o site publicado.</span></div>' : ""}
   <div class="manager__tabs" role="tablist" aria-label="Tipo de projeto"><button role="tab" aria-selected="${academic}" data-kind="project" class="${academic ? "is-active" : ""}">Projetos acadêmicos <span>${entries.project.length}</span></button><button role="tab" aria-selected="${!academic}" data-kind="other" class="${!academic ? "is-active" : ""}">Outros projetos <span>${entries.other.length}</span></button></div>
@@ -235,6 +235,11 @@ async function orderedImages(form, field) {
 }
 
 async function upload(file) {
+  if (root.dataset.uploadMode === "blob") {
+    if (!["image/jpeg", "image/png", "image/webp", "image/avif"].includes(file.type) || !file.size || file.size > 15000000) throw new Error("Use uma imagem JPG, PNG, WebP ou AVIF de até 15 MB.");
+    const { uploadImage } = await import("./blob-upload.js?v=1");
+    return uploadImage(file);
+  }
   const data = new FormData(); data.set("file", file);
   const response = await fetch("/api/upload", { method: "POST", body: data });
   const result = await response.json();
