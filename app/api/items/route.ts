@@ -33,7 +33,13 @@ function validate(body: any) {
 }
 
 export async function GET() {
-  try { return json({ items: await readPortfolio() }); } catch { return json({ error: "Não foi possível carregar os projetos salvos." }, 503); }
+  try {
+    const records = await readPortfolio();
+    const orders = Object.fromEntries(records.filter(record => record.kind === "order").map(record => [record.slug, record.item.slugs]));
+    const about = records.find(record => record.kind === "about" && record.slug === "profile" && !record.deleted)?.item;
+    const settings = Object.fromEntries(records.filter(record => record.kind === "settings" && !record.deleted).map(record => [record.slug, record.item]));
+    return json({ items: records.filter(record => ["project", "other"].includes(record.kind)), orders, about, settings });
+  } catch { return json({ error: "Não foi possível carregar os projetos salvos." }, 503); }
 }
 
 export async function PUT(request: Request) {

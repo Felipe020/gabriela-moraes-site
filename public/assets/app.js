@@ -1,13 +1,20 @@
-import { profile, experiences, software, projects as initialProjects } from "./data.js";
+import { defaultSettings, featuredProject, featuredHref, contactPhoneHref } from "./site-settings.js";
+import { defaultAbout } from "./about-data.js";
+import { applyProjectOrder } from "./project-order.js";
+import { projects as initialProjects } from "./data.js";
 import { otherProjects as initialOtherProjects } from "./other-projects.js";
 import { normalizeProject, normalizeOtherProject } from "./project-normalize.js";
 
+let siteSettings = structuredClone(defaultSettings);
+let aboutContent = { ...defaultAbout };
 let projects = initialProjects.map(normalizeProject);
 let otherProjects = initialOtherProjects.map(normalizeOtherProject);
 try {
   const response = await fetch("/api/items", { cache: "no-store" });
   if (response.ok) {
-    const { items } = await response.json();
+    const { items, orders = {}, about: savedAbout, settings = {} } = await response.json();
+    siteSettings = { tools: structuredClone(settings.tools || defaultSettings.tools), experience: structuredClone(settings.experience || defaultSettings.experience), home: { ...defaultSettings.home, ...settings.home }, contact: { ...defaultSettings.contact, ...settings.contact } };
+    if (savedAbout) aboutContent = { ...defaultAbout, ...savedAbout };
     for (const { kind, slug, item, deleted } of items) {
       const collection = kind === "project" ? projects : otherProjects;
       const index = collection.findIndex((entry) => entry.slug === slug);
@@ -15,6 +22,8 @@ try {
       else if (!deleted && index >= 0) collection[index] = kind === "project" ? normalizeProject(item) : normalizeOtherProject(item);
       else if (!deleted) collection.push(kind === "project" ? normalizeProject(item) : normalizeOtherProject(item));
     }
+    projects = applyProjectOrder(projects, orders.project);
+    otherProjects = applyProjectOrder(otherProjects, orders.other);
   }
 } catch (error) { console.error("Não foi possível carregar os projetos.", error); }
 
@@ -23,7 +32,7 @@ const href = (project) => `/projetos/${project.slug}/`;
 const escapeText = (value = "") => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 
 function imageFrame({ src, label, number = "", alt = "", fit = "cover", shape = "wide", eager = false, portrait = false, width, height, hideOverlay = false }) {
-  return `<figure class="image-frame image-frame--${shape}${portrait ? " image-frame--portrait" : ""}" data-image-frame>
+  return `<figure class="image-frame image-frame--${shape}${fit === "contain" ? " image-frame--contain" : ""}${portrait ? " image-frame--portrait" : ""}" data-image-frame>
     ${hideOverlay ? "" : `<span class="image-frame__grid" aria-hidden="true"></span><span class="image-frame__placeholder" aria-hidden="true"><span class="image-frame__marker">${number || "GM"}</span><span class="image-frame__label">${label}</span><span class="image-frame__cross">+</span></span>`}
     <img src="${src}" alt="${alt}"${width && height ? ` width="${width}" height="${height}"` : ""} loading="${eager ? "eager" : "lazy"}" decoding="async" class="image-frame__img image-frame__img--${fit}" />
   </figure>`;
@@ -37,23 +46,23 @@ function nav(isProject = false) {
       <a class="brand" href="${p}#topo" aria-label="Gabriela Moraes, voltar ao início">GABRIELA <strong>MORAES</strong></a>
       <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-nav">MENU <span class="menu-toggle__icon" aria-hidden="true"><i></i><i></i></span></button>
       <nav class="site-nav" id="site-nav" aria-label="Navegação principal">
-        <a href="${p}#sobre">Sobre</a><a href="${p}#experiencias">Experiências</a><a href="${p}#projetos">Projetos</a><a href="${p}#renders">Outros projetos</a><a href="${p}#contato">Contato</a>
+        <a href="${p}#sobre">Sobre</a>${siteSettings.experience.entries.length ? `<a href="${p}#experiencias">Experiências</a>` : ""}<a href="${p}#projetos">Projetos</a><a href="${p}#renders">Outros projetos</a><a href="${p}#contato">Contato</a>
       </nav>
     </div>
   </header>`;
 }
 
 function sectionMarker(number, title) {
-  return `<div class="section-marker"><span>${number} / 05</span><span>${title}</span></div>`;
+  return `<div class="section-marker"><span>${title}</span></div>`;
 }
 
 function hero() {
-  const first = projects[0];
+  const first = featuredProject(siteSettings.home, projects, otherProjects);
   return `<section class="hero container" aria-labelledby="hero-title">
-    <div class="hero__eyebrow"><span>PORTFÓLIO</span><span>ARQUITETURA + URBANISMO</span><span>2026</span></div>
+    <div class="hero__eyebrow"><span>PORTFÓLIO</span><span>ARQUITETURA + URBANISMO</span><span>${escapeText(siteSettings.home.year)}</span></div>
     <div class="hero__body">
-    <div class="hero__copy"><p class="hero__index">01 / ${String(projects.length).padStart(2, "0")} <span class="hairline"></span> ARQ + URB</p><h1 id="hero-title">GABRIELA<br /><span>MORAES</span></h1><p class="hero__profession">Arquitetura &amp; Urbanismo</p><a class="text-link hero__explore" href="#projetos">EXPLORAR PROJETOS <span aria-hidden="true">↘</span></a></div>
-      ${first ? `<a class="hero__visual visual-link" href="${href(first)}" aria-label="Conhecer ${first.title}">
+    <div class="hero__copy"><h1 id="hero-title">GABRIELA<br /><span>MORAES</span></h1><p class="hero__profession">Arquitetura &amp; Urbanismo</p><a class="text-link hero__explore" href="#projetos">EXPLORAR PROJETOS <span aria-hidden="true">↘</span></a></div>
+      ${first ? `<a class="hero__visual visual-link" href="${featuredHref(first)}" aria-label="Conhecer ${first.title}">
         ${imageFrame({ src: first.cover, label: "CAPA DO PROJETO", number: "01", alt: `Capa do projeto ${first.title}`, fit: "contain", shape: "hero", eager: true })}
         <div class="hero__visual-caption"><span>PROJETO EM DESTAQUE</span><span>${first.title.toUpperCase()} <span aria-hidden="true">↗</span></span></div>
       </a>` : ""}
@@ -63,30 +72,33 @@ function hero() {
 
 function about() {
   return `<section class="about section-pad" id="sobre" aria-labelledby="about-title"><div class="container">
-    ${sectionMarker("01", "SOBRE MIM")}
-    <div class="about__grid"><div class="about__photo">${imageFrame({ src: profile.profileImage, label: "FOTO PROFISSIONAL", number: "GM", alt: "Retrato de Gabriela Moraes", shape: "profile", portrait: true })}<span class="about__photo-caption">GABRIELA SOUZA MORAES <span>JUIZ DE FORA — MG</span></span></div>
-      <div class="about__content"><p class="eyebrow">ARQUITETURA + URBANISMO</p><h2 id="about-title">Sobre mim<span class="heading-period">.</span></h2><div class="about__text"><p>Sou estudante do 8º período de Arquitetura e Urbanismo na UniAcademia, em Juiz de Fora. Tenho interesse em projeto executivo, detalhamento e renderização, áreas nas quais busco me aprimorar constantemente, assim como nos diferentes aspectos da arquitetura.</p><p>Gosto de entender como as coisas funcionam e acredito que um bom projeto também depende da capacidade de transmitir informações de forma clara. Procuro desenvolver soluções criativas, funcionais e bem pensadas, sempre com atenção aos detalhes e à qualidade do resultado.</p></div>
-        <div class="about__education"><span>FORMAÇÃO</span><div><strong>${profile.degree}</strong><small>${profile.institution}<br />${profile.educationPeriod} / ${profile.currentSemester}</small></div></div>
+    <div class="about__divider" aria-hidden="true"></div>
+    <div class="about__grid"><div class="about__photo">${imageFrame({ src: aboutContent.photo, label: "FOTO PROFISSIONAL", number: "GM", alt: "Retrato de Gabriela Moraes", shape: "profile", portrait: true })}<span class="about__photo-caption">${escapeText(aboutContent.name.toUpperCase())} <span>${escapeText(aboutContent.city.toUpperCase())}</span></span></div>
+      <div class="about__content"><p class="eyebrow">${escapeText(aboutContent.subtitle)}</p><h2 id="about-title">Sobre mim<span class="heading-period">.</span></h2><div class="about__text">${aboutContent.description.map(paragraph => `<p>${escapeText(paragraph)}</p>`).join("")}</div>
+        <div class="about__education"><span>FORMAÇÃO</span><div><strong>${escapeText(aboutContent.degree)}</strong><small>${escapeText(aboutContent.institution)}<br />${escapeText(aboutContent.educationPeriod)} / ${escapeText(aboutContent.currentSemester)}</small></div></div>
       </div>
-    </div><div class="about__keywords" aria-label="Áreas de interesse"><span>PROJETO EXECUTIVO</span><b>/</b><span>DETALHAMENTO</span><b>/</b><span>MODELAGEM 3D</span><b>/</b><span>RENDERIZAÇÃO</span><b>/</b><span>ARQUITETURA</span><b>/</b><span>URBANISMO</span></div>
+    </div><div class="about__keywords" aria-label="Áreas de interesse">${aboutContent.keywords.map(keyword => `<span>${escapeText(keyword)}</span>`).join('<b aria-hidden="true">/</b>')}</div>
   </div></section>`;
 }
 
 function experience() {
+  const experience = siteSettings.experience;
+  if (!experience.entries.length) return "";
   return `<section class="experience section-pad" id="experiencias" aria-labelledby="experience-title"><div class="container">${sectionMarker("02", "TRAJETÓRIA")}
-    <div class="experience__heading"><h2 id="experience-title">Experiências<span class="heading-period">.</span></h2><p>Prática em diferentes escalas do projeto arquitetônico.</p></div>
-    <div class="experience__list">${experiences.map((e, i) => `<div class="experience__row"><span class="experience__number">0${i + 1}</span><span class="experience__period">${e.period}</span><span class="experience__studio"><strong>${e.studio}</strong><small>${e.role}</small></span></div>`).join("")}</div>
+    <div class="experience__heading"><h2 id="experience-title">Experiências<span class="heading-period">.</span></h2>${experience.intro ? `<p>${escapeText(experience.intro)}</p>` : ""}</div>
+    <div class="experience__list">${experience.entries.map((e, i) => `<div class="experience__row"><span class="experience__number">${String(i + 1).padStart(2, "0")}</span><span class="experience__period">${escapeText(e.period)}</span><span class="experience__studio"><strong>${escapeText(e.studio)}</strong><small>${escapeText(e.role)}</small></span></div>`).join("")}</div>
   </div></section>`;
 }
 
 function softwareSection() {
-  return `<section class="software-section" aria-labelledby="software-title"><div class="container software-section__grid"><div><span class="eyebrow">FERRAMENTAS DE TRABALHO</span><h2 id="software-title">Do desenho<br />à visualização<span class="heading-period">.</span></h2></div><ol class="software-list">${software.map((name, i) => `<li><span>${String(i + 1).padStart(2, "0")}</span><strong>${name}</strong></li>`).join("")}</ol></div></section>`;
+  if (!siteSettings.tools.items.length) return "";
+  return `<section class="software-section" aria-labelledby="software-title"><div class="container software-section__grid"><div><span class="eyebrow">FERRAMENTAS DE TRABALHO</span><h2 id="software-title">Do desenho<br />à visualização<span class="heading-period">.</span></h2></div><ol class="software-list">${siteSettings.tools.items.map((name, i) => `<li><span>${String(i + 1).padStart(2, "0")}</span><strong>${escapeText(name)}</strong></li>`).join("")}</ol></div></section>`;
 }
 
 function projectCard(project, index) {
   return `<a class="project-card project-card--${index + 1} visual-link" href="${href(project)}" aria-label="Conhecer ${project.title}">
     ${imageFrame({ src: project.cover, label: "CAPA DO PROJETO", number: project.id, alt: `Capa do projeto ${project.title}`, fit: "contain", shape: "landscape" })}
-    <div class="project-card__info"><span class="project-card__number">${project.id} / ${String(projects.length).padStart(2, "0")}</span><div><h3>${project.title}</h3><p>${project.category}</p></div><span class="project-card__arrow" aria-hidden="true">↗</span></div><div class="project-card__meta"><span>${project.location || ""}</span><span>${project.year || ""}</span></div>
+    <div class="project-card__info"><span class="project-card__number">${String(index + 1).padStart(2, "0")} / ${String(projects.length).padStart(2, "0")}</span><div><h3>${project.title}</h3><p>${project.category}</p></div><span class="project-card__arrow" aria-hidden="true">↗</span></div><div class="project-card__meta"><span>${project.location || ""}</span><span>${project.year || ""}</span></div>
   </a>`;
 }
 
@@ -108,16 +120,22 @@ function rendersSection() {
 }
 
 function contact() {
+  const info = siteSettings.contact;
+  const telephone = contactPhoneHref(info.phone);
+  const social = [['instagram', 'INSTAGRAM'], ['linkedin', 'LINKEDIN']].filter(([key]) => info[key]);
   return `<section class="contact section-pad" id="contato" aria-labelledby="contact-title"><div class="container">${sectionMarker("05", "CONTATO")}
     <div class="contact__heading"><h2 id="contact-title">VAMOS<br /><span>CONVERSAR?</span></h2></div>
-    <div class="contact__grid"><div class="contact__details"><p>${profile.name}<br />${profile.city}</p><div class="contact__line"><span>E-MAIL</span><a href="mailto:${profile.email}">${profile.email} <span aria-hidden="true">↗</span></a></div><div class="contact__line"><span>TELEFONE</span><a href="tel:${profile.phoneHref}">${profile.phone} <span aria-hidden="true">↗</span></a></div><div class="contact__line"><span>REDES</span><div class="social-links"><a href="${profile.instagram}" target="_blank" rel="noopener noreferrer" aria-label="Instagram de Gabriela Moraes, abre em nova aba">INSTAGRAM ↗</a><a href="${profile.linkedin}" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn de Gabriela Moraes, abre em nova aba">LINKEDIN ↗</a></div></div></div>
-    <form class="contact-form" id="contact-form"><p>Envie uma mensagem</p><label for="contact-name">NOME</label><input id="contact-name" name="name" autocomplete="name" required /><label for="contact-email">E-MAIL</label><input id="contact-email" name="email" type="email" autocomplete="email" required /><label for="contact-message">MENSAGEM</label><textarea id="contact-message" name="message" rows="3" required></textarea><button class="submit-button" type="submit">PREPARAR E-MAIL <span aria-hidden="true">↗</span></button><p class="form-note" id="form-note" role="status">O envio é concluído no seu aplicativo de e-mail.</p></form></div>
+    <div class="contact__grid"><div class="contact__details"><p>${escapeText(info.name)}${info.city ? '<br />' + escapeText(info.city) : ''}</p>
+    ${info.email ? '<div class="contact__line"><span>E-MAIL</span><a href="mailto:' + escapeText(info.email) + '">' + escapeText(info.email) + ' <span aria-hidden="true">↗</span></a></div>' : ''}
+    ${info.phone ? '<div class="contact__line"><span>TELEFONE</span><a href="tel:' + telephone + '">' + escapeText(info.phone) + ' <span aria-hidden="true">↗</span></a></div>' : ''}
+    ${social.length ? '<div class="contact__line"><span>REDES</span><div class="social-links">' + social.map(([key, label]) => '<a href="' + escapeText(info[key]) + '" target="_blank" rel="noopener noreferrer" aria-label="' + label + ', abre em nova aba">' + label + ' ↗</a>').join('') + '</div></div>' : ''}</div>
+    ${info.email ? '<form class="contact-form" id="contact-form"><p>Envie uma mensagem</p><label for="contact-name">NOME</label><input id="contact-name" name="name" autocomplete="name" required /><label for="contact-email">E-MAIL</label><input id="contact-email" name="email" type="email" autocomplete="email" required /><label for="contact-message">MENSAGEM</label><textarea id="contact-message" name="message" rows="3" required></textarea><button class="submit-button" type="submit">PREPARAR E-MAIL <span aria-hidden="true">↗</span></button><p class="form-note" id="form-note" role="status">O envio é concluído no seu aplicativo de e-mail.</p></form>' : ''}</div>
   </div></section>`;
 }
 
 function footer() {
   const aboutHref = document.body.dataset.page === "home" ? "#sobre" : "/#sobre";
-  return `<footer class="footer"><div class="container footer__grid"><div><strong>GABRIELA MORAES</strong><span>ARQUITETURA + URBANISMO</span></div><span>JUIZ DE FORA — MG</span><span>© 2026 GABRIELA MORAES</span><span class="footer__actions"><a href="/gerenciar">GERENCIAR ↗</a><a href="${aboutHref}">↑ &nbsp; VOLTAR AO SOBRE</a></span></div></footer>`;
+  return `<footer class="footer"><div class="container footer__grid"><div><strong>GABRIELA MORAES</strong><span>ARQUITETURA + URBANISMO</span></div><span>${escapeText(siteSettings.contact.city.toUpperCase())}</span><span>© ${escapeText(siteSettings.home.year)} GABRIELA MORAES</span><span class="footer__actions"><a href="/gerenciar">GERENCIAR ↗</a><a href="${aboutHref}">↑ &nbsp; VOLTAR AO SOBRE</a></span></div></footer>`;
 }
 
 function homePage() {
@@ -138,15 +156,14 @@ function drawingsSection(project, type) {
       const hasLegacyWidth = Number.isInteger(legacyWidth) && legacyWidth >= 30 && legacyWidth <= 100;
       const savedScale = Number(plan.displayScale);
       const scale = Number.isInteger(savedScale) && savedScale >= 10 && savedScale <= 300 ? savedScale : 100;
-      const adjustedWidth = hasLegacyWidth ? legacyWidth * scale / 100 : scale;
-      const defaultFullRow = !hasLegacyWidth && plan.shape !== "plan-portrait" && index === images.length - 1 && index % 2 === 0;
-      const sized = hasLegacyWidth || (scale !== 100 && defaultFullRow);
-      const compact = hasLegacyWidth && adjustedWidth <= 50;
-      const relativeColumn = !hasLegacyWidth && !defaultFullRow && scale < 100;
-      const relativeWide = !hasLegacyWidth && !defaultFullRow && scale > 100;
-      const widthStyle = sized ? `--drawing-width:${adjustedWidth}%;--drawing-column-width:${adjustedWidth * 2}%` : relativeColumn ? `--drawing-column-width:${scale}%` : relativeWide ? `--drawing-width:${scale / 2}%;--drawing-mobile-width:${scale}%` : "";
-      return `<a class="detail-plans__item detail-plans__item--${plan.shape || "plan"}${sized ? " detail-plans__item--sized" : ""}${compact ? " detail-plans__item--compact" : ""}${relativeColumn ? " detail-plans__item--relative-column" : ""}${relativeWide ? " detail-plans__item--relative-wide" : ""}"${widthStyle ? ` style="${widthStyle}"` : ""} href="${plan.src}" data-lightbox aria-label="Ampliar ${escapeText(plan.label)} de ${escapeText(project.title)} no visualizador">
-      ${imageFrame({ src: plan.src, label: plan.label.toUpperCase(), alt: `${plan.label} de ${project.title}`, fit: "contain", shape: plan.shape || "plan", width: plan.width, height: plan.height, hideOverlay: true })}
+      const defaultFullRow = plan.shape !== "plan-portrait" && index === images.length - 1 && index % 2 === 0;
+      const baseFullRow = defaultFullRow || (hasLegacyWidth && legacyWidth > 50);
+      const expanded = !baseFullRow && scale > 100;
+      const fullRow = baseFullRow || expanded;
+      const width = hasLegacyWidth ? legacyWidth * scale / 100 * (fullRow ? 1 : 2) : expanded ? scale / 2 : scale;
+      const mobileWidth = hasLegacyWidth ? legacyWidth * scale / 100 : scale;
+      return `<a class="detail-plans__item${fullRow ? " detail-plans__item--full" : ""}" style="--drawing-image-width:${width}%;--drawing-mobile-image-width:${mobileWidth}%" href="${plan.src}" data-lightbox aria-label="Ampliar ${escapeText(plan.label)} de ${escapeText(project.title)} no visualizador">
+      <div class="drawing-stage">${imageFrame({ src: plan.src, label: plan.label.toUpperCase(), alt: `${escapeText(plan.label)} de ${escapeText(project.title)}`, fit: "contain", shape: plan.shape || "plan", width: plan.width, height: plan.height, hideOverlay: true })}</div>
       <span>${escapeText(plan.label)} <span aria-hidden="true">↗</span></span>
     </a>`; }).join("")}</div>
   </section>`;
@@ -423,5 +440,5 @@ if (form) form.addEventListener("submit", (event) => {
   const subject = `Contato pelo portfólio — ${values.get("name")}`;
   const body = `Nome: ${values.get("name")}\nE-mail: ${values.get("email")}\n\n${values.get("message")}`;
   document.querySelector("#form-note").textContent = "Seu aplicativo de e-mail será aberto. Confirme o envio por lá.";
-  window.location.href = `mailto:${profile.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.location.href = `mailto:${siteSettings.contact.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 });

@@ -25,3 +25,62 @@ html{scroll-padding-top:30px}.manager{max-width:1500px;padding:0 clamp(20px,4vw,
 body:has(.manager__notice)>p{display:none}
 
 .manager__logout{border:0;background:none;color:#741e29;font-size:12px;cursor:pointer}.manager__login form{margin-top:25px;grid-template-columns:1fr}.manager__login-button{border:0;cursor:pointer}
+
+.manager__sort-button{width:100%;padding:13px 14px;margin:0 0 10px;border:1px solid var(--color-primary);background:transparent;color:var(--color-primary);text-align:left;font-size:.8rem}
+.manager__sort-button:hover{background:#ebe3e4}
+.manager__order-status:not(:empty){font-size:.78rem;margin:0 0 14px}
+.manager__order-dialog{width:min(680px,calc(100% - 28px));max-height:85dvh;padding:clamp(20px,4vw,36px);border:1px solid var(--color-line);background:var(--color-background);color:var(--color-primary);overflow-y:auto}
+.manager__order-dialog::backdrop{background:rgba(30,15,18,.48)}
+.manager__order-heading h2{font-size:clamp(1.8rem,5vw,2.5rem);letter-spacing:-.05em;margin:10px 0 16px}
+.manager__order-heading>p:last-child{font-size:.87rem;line-height:1.6}
+.manager__order-list{list-style:none;padding:0;margin:24px 0}
+.manager__order-list li{display:grid;grid-template-columns:24px 55px minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--color-line)}
+.manager__order-list img{width:55px;height:48px;object-fit:contain}
+.manager__order-list strong{font-size:.85rem;overflow-wrap:anywhere}
+.manager__order-number{font-size:.72rem}
+.manager__order-arrows{display:flex;gap:6px}
+.manager__order-arrows button{width:40px;height:42px;border:1px solid var(--color-line);background:transparent;color:inherit;font-size:1.2rem}
+.manager__order-dialog button:disabled{opacity:.3;cursor:default}
+.manager__order-feedback{min-height:42px;font-size:.8rem}
+.manager__order-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:18px}
+.manager__order-actions button{padding:12px 18px;border:1px solid var(--color-primary);background:transparent;color:inherit}
+.manager__order-actions [data-order-save]{background:var(--color-primary);color:white}
+@media(max-width:480px){.manager__order-list li{grid-template-columns:20px minmax(0,1fr) auto;gap:8px}.manager__order-list img{display:none}}
+
+.manager__areas{display:flex;gap:12px;flex-wrap:wrap;margin:0 0 24px;padding-bottom:20px;border-bottom:1px solid #ddd5d4}
+.manager__areas button{border:1px solid #c9b6b9;background:transparent;color:#741e29;padding:12px 24px;font-size:14px}
+.manager__areas button[aria-current]{background:#741e29;color:#fff;border-color:#741e29}
+.manager__about-form{max-width:1000px;margin:28px auto}
+.manager__about-photo{display:flex;align-items:center;gap:30px;flex-wrap:wrap}
+.manager__about-photo>img{width:min(220px,100%);height:280px;object-fit:cover}
+.manager__about-photo>div{max-width:400px}
+.manager__about-photo p{font-size:12px;color:#716a6a;margin:14px 0;line-height:1.6}
+.about__text p{white-space:pre-line}
+
+.manager__fields select{display:block;width:100%;padding:13px 14px;margin-top:8px;border:1px solid #c9c1c0;background:#fff;color:#302b2c;font:inherit}
+.manager__featured-preview{display:flex;align-items:center;gap:22px;background:#f0eceb;padding:18px}
+.manager__featured-preview img{width:120px;height:145px;object-fit:contain}
+.manager__featured-preview strong{font-size:16px;line-height:1.4}
+.manager__featured-preview p,.manager__settings-hint{font-size:12px;line-height:1.6;color:#716a6a;margin-top:10px}
+@media(max-width:480px){.manager__featured-preview{gap:14px}.manager__featured-preview img{width:85px;height:110px}.manager__areas button{flex:1 0 40%;padding:12px}}
+
+.manager__experience-intro{display:grid;gap:8px;font-size:13px}
+.manager__experience-intro textarea{width:100%;padding:12px 14px;border:1px solid #c9c1c0;background:#fff;color:#302b2c;line-height:1.6}
+.manager__experience-card{border:1px solid #ddd5d4;padding:clamp(16px,3vw,26px);margin-bottom:18px;background:#faf9f8}
+.manager__experience-card-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;flex-wrap:wrap}
+.manager__experience-card-head h4{margin:0;font-size:15px;color:#741e29}
+.manager__experience-card-head>div{display:flex;gap:8px}
+.manager__experience-card-head button{min-width:44px;min-height:44px;border:1px solid #c9b6b9;background:transparent;color:#741e29}
+.manager__experience-card-head .manager__remove-experience{padding:8px 12px;font-size:12px}
+.manager__experience-card-head button:disabled{opacity:.3;cursor:default}
+.manager__add-experience{border:1px solid #741e29;padding:14px 20px;background:transparent;color:#741e29;font-size:13px}
+.manager__add-experience:disabled{opacity:.4;cursor:default}
+.manager__experience-empty{font-size:14px;line-height:1.7;padding:20px 0}
+.manager__experience-card .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+.manager__drawing-name{display:grid;gap:6px;padding:4px 3px 8px;font-size:10px;letter-spacing:.03em}
+.manager__drawing-name input{width:100%;padding:9px 8px;border:1px solid #c9c1c0;background:#fff;color:#302b2c;font-size:12px;letter-spacing:normal}
+.manager__tool-row{display:flex;align-items:end;gap:16px;margin-bottom:18px}
+.manager__tool-row label{flex:1;display:grid;gap:8px;font-size:12px}
+.manager__tool-row input{width:100%;padding:12px 14px;border:1px solid #c9c1c0;background:#fff;color:#302b2c}
+.manager__tool-row button{min-height:44px;padding:10px 16px;border:1px solid #c9b6b9;color:#741e29;background:transparent;font-size:12px}
